@@ -1,7 +1,7 @@
 Package: mixhvg
 Type: Package
 Title: Mixture of Multiple Highly Variable Feature Selection Methods
-Version: 0.1.0
+Version: 0.1.1
 Authors@R: c(
   person(given = "Ruzhang", family = "Zhao", email = "ruzhangzhao@gmail.com", role = c("aut", "cre"), comment = c(ORCID = "0000-0002-3420-5771"))
   )
@@ -11,9 +11,9 @@ biocViews:
 Imports: scran, Seurat, Matrix, methods, SingleCellExperiment, scuttle
 License: GPL-3
 Encoding: UTF-8
-RoxygenNote: 7.2.0
+RoxygenNote: 7.2.1
 NeedsCompilation: no
-Packaged: 2022-10-07 15:11:14 UTC; zhaoruzhang
+Packaged: 2023-04-07 18:56:20 UTC; zhaoruzhang
 Author: Ruzhang Zhao [aut, cre] (<https://orcid.org/0000-0002-3420-5771>)
 Repository: CRAN
-Date/Publication: 2022-10-07 16:10:10 UTC
+Date/Publication: 2023-04-07 19:20:01 UTC
