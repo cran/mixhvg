@@ -66,8 +66,13 @@ FindFeatureVal<-function(method.names,
            feature_val<-dec.var
          },
          "scran"={
-           sce <- SingleCellExperiment(list(counts=counts))
-           sce <- logNormCounts(sce)
+           if(!is.null(counts)){
+             sce <- SingleCellExperiment(list(counts=counts))
+             sce <- logNormCounts(sce)
+           }else{
+             sce <- SingleCellExperiment(list(counts=lognormalizedcounts))
+             sce@assays@data$logcounts<-sce@assays@data$counts
+           }
            dec <- modelGeneVar(sce)
            dec.var <- dec@listData$bio
            dec.keep <- !is.na(dec.var) & dec.var > 0
@@ -75,8 +80,11 @@ FindFeatureVal<-function(method.names,
            feature_val<-dec.var
          },
          "scran_pos"={
-           sce <- SingleCellExperiment(list(counts=counts))
-           sce <- logNormCounts(sce)
+           if(!is.null(counts)){
+             sce <- SingleCellExperiment(list(counts=counts))
+           }else{
+             sce <- SingleCellExperiment(list(counts=lognormalizedcounts))
+           }
            dec<- modelGeneVarByPoisson(sce)
            dec.var <- dec@listData$bio
            dec.keep <- !is.na(dec.var) & dec.var > 0
@@ -107,9 +115,29 @@ FindFeatureVal<-function(method.names,
                                                binning.method = binning.method,
                                                verbose = verbose)$vst.variance.standardized
          },
+         "disp_ct"={
+           feature_val <- FindVariableFeatures(
+             log1p(counts),
+             selection.method = "disp",
+             num.bin = num.bin,
+             binning.method = binning.method,
+             verbose = verbose)$mvp.dispersion
+           feature_val[is.na(feature_val)]<-0
+           feature_val[feature_val<0]<-0
+         },
+         "disp_lognc"={
+           feature_val <- FindVariableFeatures(
+             log1p(lognormalizedcounts),
+             selection.method = "disp",
+             num.bin = num.bin,
+             binning.method = binning.method,
+             verbose = verbose)$mvp.dispersion
+           feature_val[is.na(feature_val)]<-0
+           feature_val[feature_val<0]<-0
+         },
          "disp_PFlogPF"={
            feature_val <- FindVariableFeatures(
-             PFlog1pPF,
+             log1p(PFlog1pPF),
              selection.method = "disp",
              num.bin = num.bin,
              binning.method = binning.method,
@@ -126,6 +154,9 @@ FindFeatureVal<-function(method.names,
          "mean_max_lognc"={
            feature_val<-rowMeans(lognormalizedcounts)
          },
+         "mean_max_PFlogPF"={
+           feature_val<-rowMeans(PFlog1pPF)
+         },
          {
            print("wrong input!")
          }
@@ -139,7 +170,7 @@ FindFeatureVal<-function(method.names,
 #'
 #' @param object An object, SeuratObject and matrix(including sparse matrix) are both acceptable
 #' @param method.names The following methods can be directly used for highly variable feature selection. The mixture of methods take a vector of method list, e.g. c("scran","scran_pos","seuratv1"), which is also default.
-#' \itemize{
+#' \describe{
 #' \item{scran: }{Use mean-variance curve adjustment on lognormalized count matrix, which is scran ModelGeneVar.}
 #' \item{mv_ct: }{Use mean-variance curve adjustment on count matrix, inherited from scran ModelGeneVar.}
 #' \item{mv_nc: }{Use mean-variance curve adjustment on normalized count matrix, inherited from scran ModelGeneVar.}
@@ -163,7 +194,7 @@ FindFeatureVal<-function(method.names,
 #' @param clip.max (Only work for logmv based methods like seuratv3). After standardization values larger than clip.max will be set to clip.max; default is 'auto' which sets this value to the square root of the number of cells
 #' @param num.bin (Only work for logmv or dispersion based methods)Total number of bins to use in the scaled analysis (default is 20)
 #' @param binning.method Specifies how the bins should be computed. Available methods are:
-#' \itemize{
+#' \describe{
 #' \item{equal_width: }{each bin is of equal width along the x-axis[default].}
 #' \item{equal_frequency: }{each bin contains an equal number of features (can increase statistical power to detect overdispersed features at high expression values, at the cost of reduced resolution along the x-axis).}
 #' }
@@ -181,7 +212,8 @@ FindFeatureVal<-function(method.names,
 #' @importFrom scran modelGeneVar modelGeneVarByPoisson
 #' @importFrom SingleCellExperiment SingleCellExperiment
 #' @importFrom scuttle logNormCounts
-#' @importFrom methods as
+#' @importFrom methods as slotNames
+#' @importFrom Matrix colSums
 #' @export
 #'
 #' @examples
@@ -200,6 +232,7 @@ FindVariableFeaturesMix<-function(object,
                                 num.bin = 20,
                                 binning.method = "equal_width",
                                 verbose = FALSE){
+  allfeatures<-rownames(object)
   if (nrow(object) < nfeatures){
     stop("nfeatures should be smaller than
       the number of features in expression
@@ -219,10 +252,31 @@ FindVariableFeaturesMix<-function(object,
     print("WARN: There are duplicated gene names! Make gene names unique by renaming!")
     rownames(object)<-make.unique(rownames(object))
   }
-
+  normalizedcounts<-NULL
+  lognormalizedcounts<-NULL
+  PFlog1pPF<-NULL
   if(inherits(x = object, 'Seurat')){
     res_return<-"Return Object"
-    counts<-object@assays[[DefaultAssay(object)]]@counts
+    if("counts" %in% slotNames(object@assays[[DefaultAssay(object)]])){
+        counts<-object@assays[[DefaultAssay(object)]]@counts
+    }else if ("layers"%in% slotNames(object@assays[[DefaultAssay(object)]])){
+        counts<-object@assays[[DefaultAssay(object)]]@layers$counts
+    }else{
+        stop("Check Seurat Version. General versions 4 and 5 are supported. ")
+    }
+    if(nrow(counts)==0){counts<-NULL}
+    if(is.null(counts)){
+      if("data" %in% slotNames(object@assays[[DefaultAssay(object)]])){
+          lognormalizedcounts<-object@assays[[DefaultAssay(object)]]@data
+      }else if ("layers"%in% slotNames(object@assays[[DefaultAssay(object)]])){
+          lognormalizedcounts<-object@assays[[DefaultAssay(object)]]@layers$data
+      }else{
+          stop("Check Seurat Version & Seurat Object. General versions 4 and 5 are supported. ")
+      }
+      if(nrow(lognormalizedcounts)==0){
+        stop("At least one of @counts slot or @data slot should be nonnull.")
+      }
+    }
   }else if(inherits(x = object, 'Matrix') | inherits(x = object, 'matrix')){
     if (!inherits(x = object, what = 'dgCMatrix')) {
       object <- as(object = object, Class = 'dgCMatrix')
@@ -232,39 +286,44 @@ FindVariableFeaturesMix<-function(object,
   }else{
     stop("Input only accept SeuratObject or matrix(including sparse)!")
   }
-  method.names[method.names == "disp_lognc"]<-"seuratv1"
+  method.names[method.names == "disp_nc"]<-"seuratv1"
   method.names[method.names == "logmv_ct"]<-"seuratv3"
   method.names[method.names == "mv_lognc"]<-"scran"
   method.names<-unique(method.names)
-  pf_group<-c("disp_PFlogPF","logmv_PFlogPF","mv_PFlogPF")
-  ln_group<-c("mean_max_lognc","logmv_lognc","seuratv1")
-  nc_group<-c("mean_max_nc","logmv_nc","mv_nc")
-  ct_group<-c("mean_max_ct","seuratv3","mv_ct","scran_pos","scran")
-  normalizedcounts<-NULL
-  lognormalizedcounts<-NULL
-  PFlog1pPF<-NULL
+  pf_group<-c("mean_max_PFlogPF","disp_PFlogPF","logmv_PFlogPF","mv_PFlogPF")
+  ln_group<-c("mean_max_lognc","logmv_lognc","disp_lognc","scran")
+  nc_group<-c("mean_max_nc","logmv_nc","mv_nc","seuratv1")
+  ct_group<-c("mean_max_ct","seuratv3","mv_ct","disp_ct","scran_pos")
+  if(sum(method.names%in%c(ct_group,pf_group))>0 & is.null(counts)){
+    stop("Without counts slot, no count based methods are available")
+  }
+
   if(sum(method.names%in%nc_group)>0){
-    if (!inherits(x = counts, 'Matrix')) {
-      counts <- as(object = as.matrix(x = counts), Class = 'Matrix')
+
+    if (!is.null(counts) & !inherits(x = counts, 'Matrix')) {
+      counts <- as(object = counts, Class = 'Matrix')
     }
-    if (!inherits(x = counts, what = 'dgCMatrix')) {
+    if (!is.null(counts) & !inherits(x = counts, what = 'dgCMatrix')) {
       counts <- as(object = counts, Class = 'dgCMatrix')
     }
-    lognormalizedcounts<-NormalizeData(counts,verbose=FALSE)
+    if(is.null(lognormalizedcounts)){
+      lognormalizedcounts<-NormalizeData(counts,verbose=FALSE)
+    }
     normalizedcounts<-lognormalizedcounts
     normalizedcounts@x<-exp(normalizedcounts@x)-1
-    #lognormalizedcounts<-as.matrix(lognormalizedcounts)
-    #normalizedcounts<-as.matrix(normalizedcounts)
-    #counts<-as.matrix(counts)
+
   }else if(sum(method.names%in%ln_group)>0){
-    lognormalizedcounts<-NormalizeData(counts,verbose=FALSE)
-    #lognormalizedcounts<-as.matrix(lognormalizedcounts)
+    if(is.null(lognormalizedcounts)){
+      lognormalizedcounts<-NormalizeData(counts,verbose=FALSE)
+    }
   }
   if(sum(method.names%in%pf_group)>0){
-    PFlog1pPF<-t(t(counts)/colSums(counts))*mean(colSums(counts))
-    PFlog1pPF<-log1p(PFlog1pPF)
-    PFlog1pPF<-t(t(PFlog1pPF)/colSums(PFlog1pPF))*mean(colSums(PFlog1pPF))
-    #PFlog1pPF<-as.matrix(PFlog1pPF)
+    PFlog1pPF<-NormalizeData(counts,scale.factor=mean(colSums(counts)),verbose=FALSE)
+    PFlog1pPF<-NormalizeData(PFlog1pPF,scale.factor=mean(colSums(PFlog1pPF)),normalization.method = "RC",verbose=FALSE)
+
+    #PFlog1pPF<-t(t(counts)/colSums(counts))*mean(colSums(counts))
+    #PFlog1pPF<-log1p(PFlog1pPF)
+    #PFlog1pPF<-t(t(PFlog1pPF)/colSums(PFlog1pPF))*mean(colSums(PFlog1pPF))
   }
 
   if(length(method.names) == 1){
@@ -295,10 +354,10 @@ FindVariableFeaturesMix<-function(object,
     }
   }
   if (res_return == "Return Object"){
-    VariableFeatures(object)<-rownames(counts)[order(feature_val,decreasing = TRUE)[1:nfeatures]]
+    VariableFeatures(object)<-allfeatures[order(feature_val,decreasing = TRUE)[1:nfeatures]]
     return(object)
   }
   if (res_return == "Return Features"){
-    return(rownames(counts)[order(feature_val,decreasing = TRUE)[1:nfeatures]])
+    return(allfeatures[order(feature_val,decreasing = TRUE)[1:nfeatures]])
   }
 }
