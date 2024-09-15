@@ -1,5 +1,11 @@
-ff621f8c1be08a68b5851f379866a87f *DESCRIPTION
+22acc759e4141a8795260ba7d0b89028 *DESCRIPTION
 8d7a863f5d74226b42102973fd8f0e01 *NAMESPACE
-344d32442b6c344579016407f71ea303 *R/FindVariableFeaturesMix.R
-3a6197eb515ebab7d3643d94c2e8dc56 *README.md
+94cf4064dd7391908623d5433d310041 *R/FindVariableFeaturesMix.R
 8a8e1badd1ac579c35a07c36f3891e06 *man/FindVariableFeaturesMix.Rd
+05f54a43ed3462ca9041be20bf8f8161 *man/figures/Fig.comb.png
+7b268a8ab9ccead70c6903cbe617fd21 *man/figures/Fig.method.png
+db566bccf0f56268d63a9410acdb8418 *man/figures/imgfile.png
+df58ecd965f3b39c846d3a486d26a2ae *man/figures/mixhvg.png
+99c6faf6ab3e573139f669637cf7cc27 *man/figures/mixhvg2.png
+552224172d0aac1da3dde2055661a3e4 *man/figures/umap_hvg_by_mixhvg.png
+09e6c43464e8919ca2ef67523ad4c96c *man/figures/umap_hvg_by_seuratv3.png

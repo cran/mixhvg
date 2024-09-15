@@ -232,15 +232,16 @@ FindVariableFeaturesMix<-function(object,
                                 num.bin = 20,
                                 binning.method = "equal_width",
                                 verbose = FALSE){
-  allfeatures<-rownames(object)
   if (nrow(object) < nfeatures){
     stop("nfeatures should be smaller than
       the number of features in expression
       matrix")
   }
-  if(is.null(rownames(object)[1])){
+  if(is.null(rownames(object))){
     rownames(object)<-c(1:nrow(object))
+    warnings("No gene name provided, output the row numbers of hvg.")
   }
+  allfeatures<-rownames(object)
   if(is.null(colnames(object)[1])){
     colnames(object)<-c(1:ncol(object))
   }else if(length(unique(colnames(object)))<
@@ -260,11 +261,48 @@ FindVariableFeaturesMix<-function(object,
     if("counts" %in% slotNames(object@assays[[DefaultAssay(object)]])){
         counts<-object@assays[[DefaultAssay(object)]]@counts
     }else if ("layers"%in% slotNames(object@assays[[DefaultAssay(object)]])){
-        counts<-object@assays[[DefaultAssay(object)]]@layers$counts
+       layer_names<-grep(pattern = "counts", x = names(object@assays[[DefaultAssay(object)]]@layers), value = TRUE)
+       if(length(layer_names)==0){
+         counts = NULL
+       }else if(length(layer_names)==1){
+         counts<-object@assays[[DefaultAssay(object)]]@layers[[layer_names]]
+       }else{
+         var_rank<-c()
+         for(lyr in layer_names){
+           counts_lyr<-object@assays[[DefaultAssay(object)]]@layers[[lyr]]
+           rownames(counts_lyr)<-allfeatures
+           hvg_lyr<-FindVariableFeaturesMix(counts_lyr,
+                                   method.names=method.names,
+                                   nfeatures = nfeatures,
+                                   loess.span = loess.span,
+                                   clip.max = clip.max,
+                                   num.bin = num.bin,
+                                   binning.method = binning.method,
+                                   verbose = verbose)
+           vf_vst_variable<-rep(FALSE,nrow(object))
+           vf_vst_variable[which(allfeatures%in%hvg_lyr)]<-TRUE
+           vf_vst_rank<-rep(NA,nrow(object))
+           vf_vst_rank[match(hvg_lyr,allfeatures)]<-1:nfeatures
+           var_rank1<-data.frame(vf_vst_variable,vf_vst_rank)
+           colnames(var_rank1)<-c(paste0("vf_vst_",lyr,"_variable"),
+                                  paste0("vf_vst_",lyr,"_rank"))
+           if(!is.null(dim(var_rank))){
+               var_rank<-cbind(var_rank, var_rank1)
+           }else{
+               var_rank<-var_rank1
+           }
+         }
+         object@assays[[DefaultAssay(object)]]@meta.data<-var_rank
+         VariableFeatures(object)<-VariableFeatures(object)[1:nfeatures]
+         return(object)
+       }
     }else{
         stop("Check Seurat Version. General versions 4 and 5 are supported. ")
     }
-    if(nrow(counts)==0){counts<-NULL}
+    if(!is.null(counts)){
+      if(inherits(x = counts, 'Matrix') | inherits(x = counts, 'matrix')){
+        if(nrow(counts)==0){counts<-NULL}}
+    }
     if(is.null(counts)){
       if("data" %in% slotNames(object@assays[[DefaultAssay(object)]])){
           lognormalizedcounts<-object@assays[[DefaultAssay(object)]]@data
